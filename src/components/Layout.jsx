@@ -33,14 +33,7 @@ function Layout({ children, role, setRole }) {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <select
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-              className="rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-white"
-            >
-              <option value="manager">Manager</option>
-              <option value="tech">Tech</option>
-            </select>
+            
 
             <button
               onClick={handleLogout}

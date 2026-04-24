@@ -12,17 +12,47 @@ import Analytics from "./pages/Analytics";
 function App() {
   const [jobs, setJobs] = useState([]);
   const [session, setSession] = useState(null);
-  const [role, setRole] = useState("manager");
+  const [role, setRole] = useState(null); // Changed: default to null while loading
+  const [loading, setLoading] = useState(true); // Added: global loading state
 
-  // 1. Auth listener - Fixed to handle session state properly
+  // 1. Auth & Profile Listener
   useEffect(() => {
+    const fetchProfile = async (user) => {
+      if (!user) return;
+      
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single();
+
+      if (data) {
+        setRole(data.role);
+      } else {
+        console.error("Error fetching profile:", error);
+        setRole("tech"); // Fallback if no profile exists
+      }
+      setLoading(false);
+    };
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
+      if (session) {
+        fetchProfile(session.user);
+      } else {
+        setLoading(false);
+      }
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         setSession(session);
+        if (session) {
+          fetchProfile(session.user);
+        } else {
+          setRole(null);
+          setLoading(false);
+        }
       }
     );
 
@@ -31,10 +61,8 @@ function App() {
     };
   }, []);
 
-  // 2. Fetch jobs + Realtime (Restored with Timestamps/History)
+  // 2. Fetch jobs + Realtime
   useEffect(() => {
-    // Note: If you haven't set up Supabase Auth yet, you can comment 
-    // out 'if (!session) return;' to see your dashboard locally
     if (!session) return;
 
     const fetchJobs = async () => {
@@ -110,17 +138,10 @@ function App() {
 
     setJobs((prev) => [
       {
-        id: data.id,
-        ro: data.ro,
-        shop: data.shop,
-        status: data.status,
-        issue: data.issue,
+        ...data,
         assignedTo: data.assigned_to,
-        notes: data.notes,
         photoUrl: data.photo_url,
         photoPath: data.photo_path,
-        createdAt: data.created_at,
-        photoUploadedAt: data.photo_uploaded_at,
         statusHistory: data.status_history || [],
       },
       ...prev,
@@ -191,15 +212,19 @@ function App() {
     return { success: true };
   };
 
+  // 3. Render Logic
+  if (loading) {
+    return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white">Loading...</div>;
+  }
+
   return (
     <BrowserRouter>
-      {/* If not logged in, we render Login inside the Router/Layout context */}
       {!session ? (
         <div className="min-h-screen bg-slate-950 text-white p-6 flex items-center justify-center">
           <Login />
         </div>
       ) : (
-        <Layout role={role} setRole={setRole}>
+        <Layout role={role}> {/* Removed setRole prop: No longer switchable manually */}
           <Routes>
             <Route path="/" element={<Navigate to="/dashboard" />} />
             <Route 
@@ -212,7 +237,7 @@ function App() {
                 role === "tech" ? (
                   <NewJob addJob={addJob} jobs={jobs} />
                 ) : (
-                  <div className="p-6 text-red-400">Access denied</div>
+                  <div className="p-6 text-red-400 font-bold">Error: Only Techs can create new jobs.</div>
                 )
               }
             />
@@ -232,7 +257,7 @@ function App() {
                 role === "manager" ? (
                   <Analytics jobs={jobs} />
                 ) : (
-                  <div className="p-6 text-red-400">Access denied</div>
+                  <div className="p-6 text-red-400 font-bold">Error: Manager access required.</div>
                 )
               }
             />
@@ -243,4 +268,4 @@ function App() {
   );
 }
 
-export default App;
+export default App; 
