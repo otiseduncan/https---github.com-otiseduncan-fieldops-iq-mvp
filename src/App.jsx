@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
 import Layout from "./components/Layout";
 import { supabase } from "./lib/supabaseClient";
 
@@ -11,59 +11,76 @@ import Analytics from "./pages/Analytics";
 
 function App() {
   const [jobs, setJobs] = useState([]);
+  const [session, setSession] = useState(null);
   const [role, setRole] = useState("manager");
 
+  // 1. Auth listener - Fixed to handle session state properly
   useEffect(() => {
-    const fetchJobs = async () => {
-      try {
-        const { data, error } = await supabase
-          .from("import_jobs")
-          .select("*")
-          .order("id", { ascending: false });
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+    });
 
-        if (error) {
-          console.error("Error fetching jobs:", error);
-          return;
-        }
-
-        const formattedJobs = (data || []).map((job) => ({
-          id: job.id,
-          ro: job.ro,
-          shop: job.shop,
-          status: job.status,
-          issue: job.issue,
-          assignedTo: job.assigned_to,
-          notes: job.notes,
-          photoUrl: job.photo_url,
-          photoPath: job.photo_path,
-          createdAt: job.created_at,
-          photoUploadedAt: job.photo_uploaded_at,
-          statusHistory: job.status_history || [],
-        }));
-
-        setJobs(formattedJobs);
-      } catch (err) {
-        console.error("Supabase fetch crashed:", err);
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setSession(session);
       }
+    );
+
+    return () => {
+      listener.subscription.unsubscribe();
+    };
+  }, []);
+
+  // 2. Fetch jobs + Realtime (Restored with Timestamps/History)
+  useEffect(() => {
+    // Note: If you haven't set up Supabase Auth yet, you can comment 
+    // out 'if (!session) return;' to see your dashboard locally
+    if (!session) return;
+
+    const fetchJobs = async () => {
+      const { data, error } = await supabase
+        .from("import_jobs")
+        .select("*")
+        .order("id", { ascending: false });
+
+      if (error) {
+        console.error(error);
+        return;
+      }
+
+      const formattedJobs = (data || []).map((job) => ({
+        id: job.id,
+        ro: job.ro,
+        shop: job.shop,
+        status: job.status,
+        issue: job.issue,
+        assignedTo: job.assigned_to,
+        notes: job.notes,
+        photoUrl: job.photo_url,
+        photoPath: job.photo_path,
+        createdAt: job.created_at,
+        photoUploadedAt: job.photo_uploaded_at,
+        statusHistory: job.status_history || [],
+      }));
+
+      setJobs(formattedJobs);
     };
 
     fetchJobs();
 
     const channel = supabase
-      .channel("import_jobs-realtime")
+      .channel("jobs-realtime")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "import_jobs" },
-        () => {
-          fetchJobs();
-        }
+        () => fetchJobs()
       )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [session]);
 
   const addJob = async (newJob) => {
     const timestamp = new Date().toISOString();
@@ -80,8 +97,8 @@ function App() {
           issue: newJob.issue,
           assigned_to: newJob.assignedTo,
           notes: newJob.notes,
-          photo_url: newJob.photoUrl || null,
-          photo_path: newJob.photoPath || null,
+          photo_url: newJob.photoUrl,
+          photo_path: newJob.photoPath,
           status_history: initialHistory,
           photo_uploaded_at: newJob.photoUrl ? timestamp : null,
         },
@@ -89,17 +106,27 @@ function App() {
       .select()
       .single();
 
-    if (error) return { success: false, error };
+    if (error) return { success: false };
 
-    const formattedJob = {
-      ...data,
-      assignedTo: data.assigned_to,
-      photoUrl: data.photo_url,
-      statusHistory: data.status_history || [],
-    };
+    setJobs((prev) => [
+      {
+        id: data.id,
+        ro: data.ro,
+        shop: data.shop,
+        status: data.status,
+        issue: data.issue,
+        assignedTo: data.assigned_to,
+        notes: data.notes,
+        photoUrl: data.photo_url,
+        photoPath: data.photo_path,
+        createdAt: data.created_at,
+        photoUploadedAt: data.photo_uploaded_at,
+        statusHistory: data.status_history || [],
+      },
+      ...prev,
+    ]);
 
-    setJobs((currentJobs) => [formattedJob, ...currentJobs]);
-    return { success: true, job: formattedJob };
+    return { success: true };
   };
 
   const updateJobStatus = async (jobId, newStatus) => {
@@ -112,41 +139,26 @@ function App() {
       { status: newStatus, timestamp }
     ];
 
-    const { data, error } = await supabase
+    await supabase
       .from("import_jobs")
       .update({ 
-        status: newStatus, 
+        status: newStatus,
         status_history: updatedHistory 
       })
-      .eq("id", jobId)
-      .select()
-      .single();
+      .eq("id", jobId);
 
-    if (error) {
-      console.error("Error updating status:", error);
-      return;
-    }
-
-    setJobs((currentJobs) =>
-      currentJobs.map((j) =>
-        j.id === jobId ? { ...j, status: data.status, statusHistory: data.status_history } : j
-      )
+    setJobs((prev) =>
+      prev.map((j) => (j.id === jobId ? { ...j, status: newStatus, statusHistory: updatedHistory } : j))
     );
   };
 
-  // NEW: Bulk Archive Function for End of Day
   const archiveAllCompleted = async () => {
     const completedJobs = jobs.filter(j => j.status === "Complete");
     if (completedJobs.length === 0) return;
 
     const timestamp = new Date().toISOString();
-    
-    // We update them one by one to ensure the status_history is preserved correctly for each
     const updatePromises = completedJobs.map(job => {
-      const updatedHistory = [
-        ...(job.statusHistory || []),
-        { status: "Archived", timestamp }
-      ];
+      const updatedHistory = [...(job.statusHistory || []), { status: "Archived", timestamp }];
       return supabase
         .from("import_jobs")
         .update({ status: "Archived", status_history: updatedHistory })
@@ -154,14 +166,12 @@ function App() {
     });
 
     await Promise.all(updatePromises);
-    // Realtime listener will handle the UI refresh
   };
 
   const updateJobFields = async (jobId, updates) => {
     const dbUpdates = {};
     if (updates.assignedTo !== undefined) dbUpdates.assigned_to = updates.assignedTo;
     if (updates.notes !== undefined) dbUpdates.notes = updates.notes;
-    if (updates.issue !== undefined) dbUpdates.issue = updates.issue;
 
     const { data, error } = await supabase
       .from("import_jobs")
@@ -170,39 +180,65 @@ function App() {
       .select()
       .single();
 
-    if (error) return { success: false, error };
+    if (error) return { success: false };
 
-    setJobs((currentJobs) =>
-      currentJobs.map((job) =>
-        job.id === jobId ? { ...job, ...updates } : job
+    setJobs((prev) =>
+      prev.map((j) =>
+        j.id === jobId ? { ...j, assignedTo: data.assigned_to, notes: data.notes } : j
       )
     );
+
     return { success: true };
   };
 
   return (
     <BrowserRouter>
-      <Layout role={role} setRole={setRole}>
-        <Routes>
-          <Route path="/" element={<Login />} />
-          <Route 
-            path="/dashboard" 
-            element={<Dashboard jobs={jobs} archiveAllCompleted={archiveAllCompleted} updateJobStatus={updateJobStatus} />} 
-          />
-          <Route
-            path="/jobs/new"
-            element={role === "tech" ? <NewJob addJob={addJob} jobs={jobs} /> : <div className="p-6 text-red-400">Access denied</div>}
-          />
-          <Route
-            path="/jobs/:id"
-            element={<JobDetail jobs={jobs} updateJobStatus={updateJobStatus} updateJobFields={updateJobFields} />}
-          />
-          <Route 
-            path="/analytics" 
-            element={role === "manager" ? <Analytics jobs={jobs} /> : <div className="p-6 text-red-400">Access denied</div>} 
-          />
-        </Routes>
-      </Layout>
+      {/* If not logged in, we render Login inside the Router/Layout context */}
+      {!session ? (
+        <div className="min-h-screen bg-slate-950 text-white p-6 flex items-center justify-center">
+          <Login />
+        </div>
+      ) : (
+        <Layout role={role} setRole={setRole}>
+          <Routes>
+            <Route path="/" element={<Navigate to="/dashboard" />} />
+            <Route 
+              path="/dashboard" 
+              element={<Dashboard jobs={jobs} archiveAllCompleted={archiveAllCompleted} />} 
+            />
+            <Route
+              path="/jobs/new"
+              element={
+                role === "tech" ? (
+                  <NewJob addJob={addJob} jobs={jobs} />
+                ) : (
+                  <div className="p-6 text-red-400">Access denied</div>
+                )
+              }
+            />
+            <Route
+              path="/jobs/:id"
+              element={
+                <JobDetail
+                  jobs={jobs}
+                  updateJobStatus={updateJobStatus}
+                  updateJobFields={updateJobFields}
+                />
+              }
+            />
+            <Route
+              path="/analytics"
+              element={
+                role === "manager" ? (
+                  <Analytics jobs={jobs} />
+                ) : (
+                  <div className="p-6 text-red-400">Access denied</div>
+                )
+              }
+            />
+          </Routes>
+        </Layout>
+      )}
     </BrowserRouter>
   );
 }
