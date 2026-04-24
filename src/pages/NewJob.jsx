@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 
-function NewJob({ addJob, jobs }) {
+function NewJob({ addJob }) {
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
@@ -31,7 +31,6 @@ function NewJob({ addJob, jobs }) {
   const handleSubmit = async (event) => {
     event.preventDefault();
 
-    // BASIC FORM VALIDATION
     if (!formData.ro || !formData.shop || !formData.issue) {
       alert("RO, Shop, and Issue are required");
       return;
@@ -40,22 +39,17 @@ function NewJob({ addJob, jobs }) {
     setUploading(true);
 
     let photoUrl = null;
-    let photoPath = null;
 
     try {
       if (photoFile) {
         const fileExt = photoFile.name.split(".").pop();
-        // TRIM RO for cleaner file names
-        const safeRo = formData.ro.trim() || `job-${Date.now()}`;
+        const safeRo = formData.ro.trim().replace(/[^a-z0-9]/gi, '_') || `job-${Date.now()}`;
         const fileName = `${safeRo}-${Date.now()}.${fileExt}`;
         const filePath = `job-photos/${fileName}`;
 
         const { error: uploadError } = await supabase.storage
           .from("job-photos")
-          .upload(filePath, photoFile, {
-            cacheControl: "3600",
-            upsert: false,
-          });
+          .upload(filePath, photoFile);
 
         if (uploadError) {
           console.error("Photo upload error:", uploadError);
@@ -69,7 +63,6 @@ function NewJob({ addJob, jobs }) {
           .getPublicUrl(filePath);
 
         photoUrl = publicUrlData.publicUrl;
-        photoPath = filePath;
       }
 
       const newJob = {
@@ -77,18 +70,21 @@ function NewJob({ addJob, jobs }) {
         shop: formData.shop.trim(),
         issue: formData.issue.trim(),
         notes: formData.notes.trim(),
+        assignedTo: "",           // Important: empty string, not null
         photoUrl,
-        photoPath,
       };
 
       const result = await addJob(newJob);
 
-      if (!result?.success) {
-        setUploading(false);
-        return;
+      if (result?.success) {
+        alert("✅ Job created successfully!");
+        navigate("/dashboard");
+      } else {
+        alert(`❌ Failed to save job: ${result?.error || "Unknown error"}`);
       }
-
-      navigate("/dashboard");
+    } catch (err) {
+      console.error("Critical Error:", err);
+      alert("An unexpected error occurred. Check the console.");
     } finally {
       setUploading(false);
     }
@@ -103,68 +99,37 @@ function NewJob({ addJob, jobs }) {
         <form onSubmit={handleSubmit} className="grid gap-4">
           <div>
             <label className="block text-sm text-slate-300 mb-2">RO Number</label>
-            <input
-              type="text"
-              name="ro"
-              value={formData.ro}
-              onChange={handleChange}
-              placeholder="2400912345"
-              className="w-full rounded-xl bg-slate-950 border border-slate-700 px-4 py-3 text-white outline-none focus:border-slate-500"
-            />
+            <input type="text" name="ro" value={formData.ro} onChange={handleChange} placeholder="2400912345"
+              className="w-full rounded-xl bg-slate-950 border border-slate-700 px-4 py-3 text-white outline-none focus:border-slate-500" />
           </div>
 
           <div>
             <label className="block text-sm text-slate-300 mb-2">Shop Name</label>
-            <input
-              type="text"
-              name="shop"
-              value={formData.shop}
-              onChange={handleChange}
-              placeholder="Macon"
-              className="w-full rounded-xl bg-slate-950 border border-slate-700 px-4 py-3 text-white outline-none focus:border-slate-500"
-            />
+            <input type="text" name="shop" value={formData.shop} onChange={handleChange} placeholder="Macon"
+              className="w-full rounded-xl bg-slate-950 border border-slate-700 px-4 py-3 text-white outline-none focus:border-slate-500" />
           </div>
 
           <div>
             <label className="block text-sm text-slate-300 mb-2">Issue Type</label>
-            <input
-              type="text"
-              name="issue"
-              value={formData.issue}
-              onChange={handleChange}
-              placeholder="Calibration Required"
-              className="w-full rounded-xl bg-slate-950 border border-slate-700 px-4 py-3 text-white outline-none focus:border-slate-500"
-            />
+            <input type="text" name="issue" value={formData.issue} onChange={handleChange} placeholder="Calibration Required"
+              className="w-full rounded-xl bg-slate-950 border border-slate-700 px-4 py-3 text-white outline-none focus:border-slate-500" />
           </div>
 
           <div>
             <label className="block text-sm text-slate-300 mb-2">Notes</label>
-            <textarea
-              rows="5"
-              name="notes"
-              value={formData.notes}
-              onChange={handleChange}
-              placeholder="Add notes here..."
-              className="w-full rounded-xl bg-slate-950 border border-slate-700 px-4 py-3 text-white outline-none focus:border-slate-500"
-            ></textarea>
+            <textarea rows="5" name="notes" value={formData.notes} onChange={handleChange} placeholder="Add notes here..."
+              className="w-full rounded-xl bg-slate-950 border border-slate-700 px-4 py-3 text-white outline-none focus:border-slate-500" />
           </div>
 
           <div>
-            <label className="block text-sm text-slate-300 mb-2">Job Photo</label>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleFileChange}
-              className="w-full rounded-xl bg-slate-950 border border-slate-700 px-4 py-3 text-white"
-            />
+            <label className="block text-sm text-slate-300 mb-2">Job Photo (Optional)</label>
+            <input type="file" accept="image/*" onChange={handleFileChange}
+              className="w-full rounded-xl bg-slate-950 border border-slate-700 px-4 py-3 text-white" />
           </div>
 
-          <button
-            type="submit"
-            disabled={uploading}
-            className="rounded-xl bg-blue-600 hover:bg-blue-500 transition px-4 py-3 font-semibold disabled:opacity-50"
-          >
-            {uploading ? "Uploading..." : "Create Job"}
+          <button type="submit" disabled={uploading}
+            className="rounded-xl bg-blue-600 hover:bg-blue-500 transition px-4 py-3 font-semibold disabled:opacity-50 text-white">
+            {uploading ? "Creating Job..." : "Create Job"}
           </button>
         </form>
       </div>

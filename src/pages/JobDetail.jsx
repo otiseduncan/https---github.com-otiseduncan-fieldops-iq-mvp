@@ -37,7 +37,7 @@ function JobDetail({ jobs, updateJobStatus, updateJobFields, role }) {
   if (!job) {
     return (
       <div className="p-6">
-        <h1 className="text-3xl font-bold mb-2">Job Not Found</h1>
+        <h1 className="text-3xl font-bold mb-2 text-white">Job Not Found</h1>
         <p className="text-slate-400">No job exists for this record.</p>
       </div>
     );
@@ -59,20 +59,21 @@ function JobDetail({ jobs, updateJobStatus, updateJobFields, role }) {
     if (window.confirm("Archive this job? It will be hidden from the dashboard.")) {
       const { error } = await supabase
         .from("import_jobs")
-        .update({ archived: true }) //
+        .update({ archived: true })
         .eq("id", job.id);
 
       if (error) {
         console.error("Archive error:", error);
       } else {
-        alert("Job archived"); //
+        alert("Job archived");
         navigate("/dashboard");
       }
     }
   };
 
   return (
-    <div className="pb-20">
+    <div className="pb-20 text-white">
+      {/* HEADER SECTION */}
       <div className="flex justify-between items-start mb-6 print:hidden">
         <div>
           <h1 className="text-3xl font-bold mb-2">Job Detail</h1>
@@ -83,6 +84,7 @@ function JobDetail({ jobs, updateJobStatus, updateJobFields, role }) {
         </div>
       </div>
 
+      {/* JOB DATA CARD */}
       <div className="max-w-4xl bg-slate-900 border border-slate-800 rounded-2xl p-8 mb-8 print:hidden">
         <div className="grid md:grid-cols-2 gap-4 mb-6">
           <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
@@ -95,7 +97,7 @@ function JobDetail({ jobs, updateJobStatus, updateJobFields, role }) {
             <select
               value={job.status}
               onChange={handleStatusChange}
-              className="w-full mt-2 rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 outline-none focus:border-slate-500"
+              className="w-full mt-2 rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-white outline-none focus:border-slate-500"
             >
               <option>Pending</option>
               <option>In Progress</option>
@@ -122,7 +124,7 @@ function JobDetail({ jobs, updateJobStatus, updateJobFields, role }) {
                   setSaveStatus("error");
                 }
               }}
-              className="w-full mt-2 rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 outline-none focus:border-slate-500"
+              className="w-full mt-2 rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-white outline-none focus:border-slate-500"
             >
               <option value="">Unassigned</option>
               <option value="Tech A">Tech A</option>
@@ -137,12 +139,7 @@ function JobDetail({ jobs, updateJobStatus, updateJobFields, role }) {
           </div>
         </div>
 
-        <div className="mb-4 text-sm h-5 transition-all">
-          {saveStatus === "saving" && <span className="text-yellow-400">Saving...</span>}
-          {saveStatus === "saved" && <span className="text-green-400">Saved</span>}
-          {saveStatus === "error" && <span className="text-red-400">Save failed</span>}
-        </div>
-
+        {/* NOTES SECTION */}
         <div className="mb-6">
           <label className="block text-sm text-slate-300 mb-2">Notes</label>
           <textarea
@@ -154,6 +151,7 @@ function JobDetail({ jobs, updateJobStatus, updateJobFields, role }) {
           ></textarea>
         </div>
 
+        {/* FIX: PHOTO RENDERING */}
         {job.photoUrl && (
           <div className="mb-6">
             <div className="flex justify-between items-center mb-2">
@@ -164,6 +162,10 @@ function JobDetail({ jobs, updateJobStatus, updateJobFields, role }) {
               src={job.photoUrl}
               alt={`Job ${job.ro}`}
               className="w-full max-w-2xl rounded-xl border border-slate-700"
+              onError={(e) => { 
+                e.target.style.display = 'none'; 
+                console.error("Photo Load Failed. Check if Supabase bucket is public.");
+              }}
             />
           </div>
         )}
@@ -186,41 +188,62 @@ function JobDetail({ jobs, updateJobStatus, updateJobFields, role }) {
               ))}
             </ul>
           ) : (
-            <p className="text-slate-500 text-sm text-center py-4">No status history available for this job.</p>
+            <p className="text-slate-500 text-sm text-center py-4">No status history available.</p>
           )}
         </div>
       </div>
 
-      {/* INVOICE PREVIEW BLOCK */}
-      <div className="max-w-4xl bg-slate-950 border border-slate-700 rounded-xl p-6 print:bg-white print:text-black print:border-none print:m-0 print:p-0">
-        <h2 className="text-xl font-semibold mb-4">Invoice</h2>
-
-        <div className="space-y-2">
-          <p><strong>RO:</strong> {job.ro}</p>
-          <p><strong>Shop:</strong> {job.shop}</p>
-          <p><strong>Issue:</strong> {job.issue}</p>
-          <p><strong>Technician:</strong> {job.assignedTo || "Unassigned"}</p>
+      {/* NEW: PROFESSIONAL INVOICE BREAKDOWN */}
+      <div className="max-w-4xl bg-slate-950 border border-slate-700 rounded-xl p-6 print:bg-white print:text-black print:border-none">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-semibold print:text-2xl">Invoice</h2>
+          <span className="text-slate-500 text-sm print:hidden">Draft</span>
         </div>
 
-        <p className="mt-4 text-lg">
-          <strong>Total:</strong> $250.00
-        </p>
+        <div className="grid grid-cols-2 gap-4 mb-6 text-sm border-b border-slate-800 pb-6 print:border-slate-300">
+          <div>
+            <p className="text-slate-400">Shop</p>
+            <p className="font-semibold">{job.shop}</p>
+          </div>
+          <div>
+            <p className="text-slate-400">Reference (RO)</p>
+            <p className="font-semibold">#{job.ro}</p>
+          </div>
+        </div>
 
-        <div className="flex gap-4 mt-6 print:hidden">
-          {/* PRINT BUTTON */}
-          <button
-            onClick={() => window.print()}
-            className="bg-blue-600 hover:bg-blue-500 px-6 py-2 rounded-xl font-semibold transition"
-          >
+        <table className="w-full text-left mb-6">
+          <thead>
+            <tr className="text-slate-400 text-xs uppercase border-b border-slate-800 print:border-slate-300">
+              <th className="py-2">Description</th>
+              <th className="py-2 text-right">Amount</th>
+            </tr>
+          </thead>
+          <tbody className="text-sm">
+            <tr className="border-b border-slate-800/50 print:border-slate-200">
+              <td className="py-3">
+                <p className="font-medium">ADAS System Calibration</p>
+                <p className="text-xs text-slate-500">{job.issue}</p>
+              </td>
+              <td className="py-3 text-right">$200.00</td>
+            </tr>
+            <tr>
+              <td className="py-3 text-slate-300">Mobile Service Fee</td>
+              <td className="py-3 text-right">$50.00</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div className="flex justify-between items-center pt-4 border-t border-slate-700 print:border-slate-300">
+          <p className="text-lg font-bold">Total Due</p>
+          <p className="text-2xl font-bold text-blue-400 print:text-black">$250.00</p>
+        </div>
+
+        <div className="mt-8 flex gap-4 print:hidden">
+          <button onClick={() => window.print()} className="bg-blue-600 px-6 py-2 rounded-xl font-semibold">
             Print Invoice
           </button>
-
-          {/* ARCHIVE BUTTON */}
           {role === "manager" && (
-            <button
-              onClick={handleArchive}
-              className="bg-red-600 hover:bg-red-500 px-6 py-2 rounded-xl font-semibold transition"
-            >
+            <button onClick={handleArchive} className="bg-red-900/40 border border-red-700 text-red-300 px-6 py-2 rounded-xl">
               Archive Job
             </button>
           )}
