@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
-// ADDED: archiveAllCompleted as a prop
 function Dashboard({ jobs = [], archiveAllCompleted }) {
   const [shopFilter, setShopFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
@@ -9,11 +8,10 @@ function Dashboard({ jobs = [], archiveAllCompleted }) {
 
   const filteredJobs = jobs.filter((job) => {
     const matchesShop = shopFilter === "All" || job.shop === shopFilter;
-    const matchesRo = (job.ro || "").toLowerCase().includes(roSearch.toLowerCase());
+    const matchesRo = (job.ro || "")
+      .toLowerCase()
+      .includes(roSearch.toLowerCase());
 
-    // UPDATED LOGIC: 
-    // If "All Statuses" is selected, hide Archived and Cancelled jobs automatically.
-    // If a user specifically selects "Archived" or "Cancelled" in the dropdown, show them.
     if (statusFilter === "All") {
       const isActive = !["Archived", "Cancelled"].includes(job.status);
       return matchesShop && matchesRo && isActive;
@@ -29,15 +27,18 @@ function Dashboard({ jobs = [], archiveAllCompleted }) {
     (job) => job.status === "Pending"
   ).length;
 
-  const completedJobs = filteredJobs.filter(
-    (job) => job.status === "Complete"
+  const inProgressJobs = filteredJobs.filter(
+    (job) => job.status === "In Progress"
   ).length;
 
-  const documentedJobs = filteredJobs.filter(
-    (job) => job.photoUrl && job.photoUrl.startsWith("http")
+  const holdJobs = filteredJobs.filter(
+    (job) => job.status === "Hold"
   ).length;
 
-  const uniqueShops = ["All", ...new Set(jobs.map(job => job.shop).filter(Boolean))];
+  const uniqueShops = [
+    "All",
+    ...new Set(jobs.map((job) => job.shop).filter(Boolean)),
+  ];
 
   return (
     <div>
@@ -49,23 +50,28 @@ function Dashboard({ jobs = [], archiveAllCompleted }) {
           <p className="text-slate-400 text-sm">Total Jobs</p>
           <h2 className="text-3xl font-bold mt-2">{totalJobs}</h2>
         </div>
+
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
           <p className="text-slate-400 text-sm">Pending</p>
           <h2 className="text-3xl font-bold mt-2">{pendingJobs}</h2>
         </div>
+
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-          <p className="text-slate-400 text-sm">Completed Jobs</p>
-          <h2 className="text-3xl font-bold mt-2">{completedJobs}</h2>
+          <p className="text-slate-400 text-sm">In Progress</p>
+          <h2 className="text-3xl font-bold mt-2">{inProgressJobs}</h2>
         </div>
+
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-          <p className="text-slate-400 text-sm">Documented</p>
-          <h2 className="text-3xl font-bold mt-2">{documentedJobs}</h2>
+          <p className="text-slate-400 text-sm">Hold</p>
+          <h2 className="text-3xl font-bold mt-2">{holdJobs}</h2>
         </div>
       </div>
 
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 mb-4 flex flex-col md:flex-row gap-4">
         <div className="flex-1">
-          <label className="block text-sm text-slate-400 mb-2">Search RO</label>
+          <label className="block text-sm text-slate-400 mb-2">
+            Search RO
+          </label>
           <input
             type="text"
             placeholder="e.g. 2400912345"
@@ -74,22 +80,28 @@ function Dashboard({ jobs = [], archiveAllCompleted }) {
             className="w-full rounded-xl bg-slate-950 border border-slate-700 px-4 py-2 text-white outline-none focus:border-slate-500 focus:ring-1 focus:ring-blue-500"
           />
         </div>
-        
+
         <div className="flex-1">
-          <label className="block text-sm text-slate-400 mb-2">Filter by Shop</label>
+          <label className="block text-sm text-slate-400 mb-2">
+            Filter by Shop
+          </label>
           <select
             value={shopFilter}
             onChange={(e) => setShopFilter(e.target.value)}
             className="w-full rounded-xl bg-slate-950 border border-slate-700 px-4 py-2 text-white outline-none focus:border-slate-500 focus:ring-1 focus:ring-blue-500"
           >
-            {uniqueShops.map(shop => (
-              <option key={shop} value={shop}>{shop}</option>
+            {uniqueShops.map((shop) => (
+              <option key={shop} value={shop}>
+                {shop}
+              </option>
             ))}
           </select>
         </div>
 
         <div className="flex-1">
-          <label className="block text-sm text-slate-400 mb-2">Filter by Status</label>
+          <label className="block text-sm text-slate-400 mb-2">
+            Filter by Status
+          </label>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
@@ -100,7 +112,6 @@ function Dashboard({ jobs = [], archiveAllCompleted }) {
             <option value="In Progress">In Progress</option>
             <option value="Hold">Hold</option>
             <option value="Complete">Complete</option>
-            {/* ADDED ARCHIVE/CANCEL TO FILTER */}
             <option value="Archived">Archived</option>
             <option value="Cancelled">Cancelled</option>
           </select>
@@ -119,7 +130,6 @@ function Dashboard({ jobs = [], archiveAllCompleted }) {
           Reset Filters
         </button>
 
-        {/* NEW: Archive Button */}
         <button
           onClick={() => {
             if (window.confirm("Move all 'Complete' jobs to Archive?")) {
