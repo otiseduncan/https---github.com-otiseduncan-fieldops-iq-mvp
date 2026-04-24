@@ -17,7 +17,6 @@ function NewJob({ addJob, jobs }) {
 
   const handleChange = (event) => {
     const { name, value } = event.target;
-
     setFormData((currentData) => ({
       ...currentData,
       [name]: value,
@@ -32,6 +31,12 @@ function NewJob({ addJob, jobs }) {
   const handleSubmit = async (event) => {
     event.preventDefault();
 
+    // BASIC FORM VALIDATION
+    if (!formData.ro || !formData.shop || !formData.issue) {
+      alert("RO, Shop, and Issue are required");
+      return;
+    }
+
     setUploading(true);
 
     let photoUrl = null;
@@ -40,7 +45,8 @@ function NewJob({ addJob, jobs }) {
     try {
       if (photoFile) {
         const fileExt = photoFile.name.split(".").pop();
-        const safeRo = formData.ro || `job-${Date.now()}`;
+        // TRIM RO for cleaner file names
+        const safeRo = formData.ro.trim() || `job-${Date.now()}`;
         const fileName = `${safeRo}-${Date.now()}.${fileExt}`;
         const filePath = `job-photos/${fileName}`;
 
@@ -52,11 +58,11 @@ function NewJob({ addJob, jobs }) {
           });
 
         if (uploadError) {
-  console.error("Photo upload error:", uploadError);
-  alert(`Photo upload failed: ${uploadError.message}`); // Now it will tell you WHY
-  setUploading(false);
-  return;
-}
+          console.error("Photo upload error:", uploadError);
+          alert(`Photo upload failed: ${uploadError.message}`);
+          setUploading(false);
+          return;
+        }
 
         const { data: publicUrlData } = supabase.storage
           .from("job-photos")
@@ -67,13 +73,10 @@ function NewJob({ addJob, jobs }) {
       }
 
       const newJob = {
-        id: jobs.length + 1,
-        ro: formData.ro,
-        shop: formData.shop,
-        status: "Pending",
-        issue: formData.issue,
-        assignedTo: "Unassigned",
-        notes: formData.notes,
+        ro: formData.ro.trim(),
+        shop: formData.shop.trim(),
+        issue: formData.issue.trim(),
+        notes: formData.notes.trim(),
         photoUrl,
         photoPath,
       };
@@ -81,7 +84,6 @@ function NewJob({ addJob, jobs }) {
       const result = await addJob(newJob);
 
       if (!result?.success) {
-        alert("Job failed to save. Check console for the Supabase error.");
         setUploading(false);
         return;
       }

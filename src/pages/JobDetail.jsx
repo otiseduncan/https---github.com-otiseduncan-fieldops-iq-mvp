@@ -1,8 +1,10 @@
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
+import { supabase } from "../lib/supabaseClient";
 
-function JobDetail({ jobs, updateJobStatus, updateJobFields }) {
+function JobDetail({ jobs, updateJobStatus, updateJobFields, role }) {
   const { id } = useParams();
+  const navigate = useNavigate();
   const job = jobs.find((item) => item.id === Number(id));
 
   const [assignedTo, setAssignedTo] = useState("");
@@ -34,7 +36,7 @@ function JobDetail({ jobs, updateJobStatus, updateJobFields }) {
 
   if (!job) {
     return (
-      <div>
+      <div className="p-6">
         <h1 className="text-3xl font-bold mb-2">Job Not Found</h1>
         <p className="text-slate-400">No job exists for this record.</p>
       </div>
@@ -53,9 +55,25 @@ function JobDetail({ jobs, updateJobStatus, updateJobFields }) {
     }).format(date);
   };
 
+  const handleArchive = async () => {
+    if (window.confirm("Archive this job? It will be hidden from the dashboard.")) {
+      const { error } = await supabase
+        .from("import_jobs")
+        .update({ archived: true }) //
+        .eq("id", job.id);
+
+      if (error) {
+        console.error("Archive error:", error);
+      } else {
+        alert("Job archived"); //
+        navigate("/dashboard");
+      }
+    }
+  };
+
   return (
-    <div>
-      <div className="flex justify-between items-start mb-6">
+    <div className="pb-20">
+      <div className="flex justify-between items-start mb-6 print:hidden">
         <div>
           <h1 className="text-3xl font-bold mb-2">Job Detail</h1>
           <p className="text-slate-400">RO #{job.ro}</p>
@@ -65,7 +83,7 @@ function JobDetail({ jobs, updateJobStatus, updateJobFields }) {
         </div>
       </div>
 
-      <div className="max-w-4xl bg-slate-900 border border-slate-800 rounded-2xl p-8 mb-8">
+      <div className="max-w-4xl bg-slate-900 border border-slate-800 rounded-2xl p-8 mb-8 print:hidden">
         <div className="grid md:grid-cols-2 gap-4 mb-6">
           <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
             <p className="text-slate-400 text-sm">Shop</p>
@@ -83,7 +101,6 @@ function JobDetail({ jobs, updateJobStatus, updateJobFields }) {
               <option>In Progress</option>
               <option>Hold</option>
               <option>Complete</option>
-              {/* NEW STATUS OPTIONS */}
               <option>Archived</option>
               <option>Cancelled</option>
             </select>
@@ -152,7 +169,8 @@ function JobDetail({ jobs, updateJobStatus, updateJobFields }) {
         )}
       </div>
 
-      <div className="max-w-4xl">
+      {/* ACTIVITY LOG */}
+      <div className="max-w-4xl mb-8 print:hidden">
         <h2 className="text-lg font-semibold mb-4 text-slate-300">Activity Log</h2>
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
           {job.statusHistory && job.statusHistory.length > 0 ? (
@@ -169,6 +187,42 @@ function JobDetail({ jobs, updateJobStatus, updateJobFields }) {
             </ul>
           ) : (
             <p className="text-slate-500 text-sm text-center py-4">No status history available for this job.</p>
+          )}
+        </div>
+      </div>
+
+      {/* INVOICE PREVIEW BLOCK */}
+      <div className="max-w-4xl bg-slate-950 border border-slate-700 rounded-xl p-6 print:bg-white print:text-black print:border-none print:m-0 print:p-0">
+        <h2 className="text-xl font-semibold mb-4">Invoice</h2>
+
+        <div className="space-y-2">
+          <p><strong>RO:</strong> {job.ro}</p>
+          <p><strong>Shop:</strong> {job.shop}</p>
+          <p><strong>Issue:</strong> {job.issue}</p>
+          <p><strong>Technician:</strong> {job.assignedTo || "Unassigned"}</p>
+        </div>
+
+        <p className="mt-4 text-lg">
+          <strong>Total:</strong> $250.00
+        </p>
+
+        <div className="flex gap-4 mt-6 print:hidden">
+          {/* PRINT BUTTON */}
+          <button
+            onClick={() => window.print()}
+            className="bg-blue-600 hover:bg-blue-500 px-6 py-2 rounded-xl font-semibold transition"
+          >
+            Print Invoice
+          </button>
+
+          {/* ARCHIVE BUTTON */}
+          {role === "manager" && (
+            <button
+              onClick={handleArchive}
+              className="bg-red-600 hover:bg-red-500 px-6 py-2 rounded-xl font-semibold transition"
+            >
+              Archive Job
+            </button>
           )}
         </div>
       </div>
