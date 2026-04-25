@@ -74,16 +74,18 @@ function NewJob({ addJob }) {
         .getPublicUrl(filePath);
 
       photoUrl = publicUrlData.publicUrl;
+const photoUploadedAt = new Date().toISOString();
 
-      // Prepare job data
-      const newJob = {
-        ro: formData.ro.trim(),
-        shop: formData.shop.trim(),
-        issue: formData.issue.trim(),
-        notes: formData.notes.trim(),
-        assignedTo: "",
-        photoUrl,
-      };
+// Prepare job data
+const newJob = {
+  ro: formData.ro.trim(),
+  shop: formData.shop.trim(),
+  issue: formData.issue.trim(),
+  notes: formData.notes.trim(),
+  assignedTo: "",
+  photoUrl,
+  photoUploadedAt,
+};
 
       const result = await addJob(newJob);
 

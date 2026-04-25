@@ -49,12 +49,13 @@ function App() {
 
       if (error) { console.error(error); return; }
       setJobs(data.map(job => ({
-        ...job,
-        assignedTo: job.assigned_to,
-        photoUrl: job.photo_url,
-        statusHistory: job.status_history || [],
-        createdAt: job.created_at
-      })));
+  ...job,
+  assignedTo: job.assigned_to,
+  photoUrl: job.photo_url,
+  photoUploadedAt: job.photo_uploaded_at,
+  statusHistory: job.status_history || [],
+  createdAt: job.created_at
+})));
     };
 
     fetchJobs();
@@ -74,8 +75,9 @@ function App() {
         assigned_to: newJob.assignedTo || "",        // ← Fixed here
         notes: newJob.notes?.trim() || "",
         photo_url: newJob.photoUrl || null,
-        archived: false,
-        status_history: [{ status: "Pending", timestamp: new Date().toISOString() }]
+photo_uploaded_at: newJob.photoUploadedAt || null,
+archived: false,
+status_history: [{ status: "Pending", timestamp: new Date().toISOString() }]
       }])
       .select()
       .single();
